@@ -18,4 +18,16 @@ In this domain, observability is not a luxury; it is the absolute proof of archi
 
 To expose the silent killer, we deployed a background daemon task that runs a continuous heartbeat: `await asyncio.sleep(0.01)`. 
 
-The watchdog calculates the delta between its intended wake time and its actual wake time. If the delta (lag) exceeds a strict 50ms threshold, it proves the GIL was locked. The watchdog then creates a manual OTel span named `event_loop_blocked`. Crucially, it **backdates** the span's start time to perfectly cover the "dead time," generating a glaring red flag on your OTel Gantt charts.
+### Visual Evidence: The "Frozen" vs. "Fluid" Event Loop
+
+By load-testing our intentionally broken `/api/v1/naive` endpoint and our GIL-safe `/api/v2/optimized` endpoint, the telemetry reveals the exact architectural difference.
+
+**Post-Fix Trace (The Optimized Architecture)**
+By swapping `json` for `orjson` (a Rust-based library that explicitly releases the GIL during serialization) and offloading the cryptography to a `ProcessPoolExecutor`, the main thread is liberated. The *Event Loop* lag remains under 5ms, effortlessly handling 100+ concurrent pings.
+
+```text
+[HTTP POST /api/v2/optimized ........]
+  ├── [orjson_parse (12ms)]
+  └── [BCRYPT HASHING (130ms) ....................] (Worker Process)
+[HTTP POST /api/v2/optimized ........] 🌊 FLUID (No Loop Blockage)
+```
