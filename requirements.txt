@@ -2,3 +2,7 @@ fastapi
 uvicorn
 bcrypt
 aiohttp
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-instrumentation-fastapi
+opentelemetry-exporter-otlp
