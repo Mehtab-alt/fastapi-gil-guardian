@@ -1,8 +1,8 @@
 # fastapi-gil-guardian
 
-Welcome to the **fastapi-gil-guardian**, a powerful blueprint and engineering document that showcases how to manage both I/O and CPU tasks in Python effectively. This project clearly illustrates, through real-world observation, how to step around the Global Interpreter Lock (GIL) and keep a smooth event loop functioning even under intense pressure.
+Thanks for checking out **fastapi-gil-guardian**, a powerful blueprint and engineering document that showcases how to manage both I/O and CPU tasks in Python effectively. This project clearly illustrates, through real-world observation, how to step around the Global Interpreter Lock (GIL) and keep a smooth event loop functioning even under intense pressure.
 
-## The Bottleneck: The Cooperative Contract and the GIL
+## The Bottleneck we resolving is the Cooperative Contract and the GIL
 
 The Python `asyncio` framework relies on a "Cooperative Contract." This means tasks need to promptly and willingly hand back control to the event loop. Since the event loop operates on a single thread, its primary responsibility is to manage network I/O and schedule tasks effectively.
 
