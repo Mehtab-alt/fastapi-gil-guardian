@@ -22,12 +22,29 @@ To expose the silent killer, we deployed a background daemon task that runs a co
 
 By load-testing our intentionally broken `/api/v1/naive` endpoint and our GIL-safe `/api/v2/optimized` endpoint, the telemetry reveals the exact architectural difference.
 
-**Post-Fix Trace (The Optimized Architecture)**
-By swapping `json` for `orjson` (a Rust-based library that explicitly releases the GIL during serialization) and offloading the cryptography to a `ProcessPoolExecutor`, the main thread is liberated. The *Event Loop* lag remains under 5ms, effortlessly handling 100+ concurrent pings.
+[HTTP POST /api/v2/optimized ........] 🌊 FLUID (asyncio lag < 5ms)
+```
 
-```text
-[HTTP POST /api/v2/optimized ........]
-  ├── [orjson_parse (12ms)]
-  └── [BCRYPT HASHING (130ms) ....................] (Worker Process)
-[HTTP POST /api/v2/optimized ........] 🌊 FLUID (No Loop Blockage)
+> **⚠️ Architectural Warning: Latency vs. Fluidity**
+> Claiming a "<5ms lag Post-Fix fluid state" refers strictly to the *Event Loop's* responsiveness to I/O, not the duration of the request itself. Offloading does not inherently accelerate the math; it simply isolates the math to prevent it from starving *other* concurrent users. 
+
+## Surviving the Void: ProcessPool Context Propagation
+
+A distributed trace that breaks at a process boundary is a lie. Background threads (like OTel's `BatchSpanProcessor`) do not survive Python multiprocessing boundaries (fork/spawn). To maintain the parent-child span relationship, the trace context MUST be explicitly serialized (injected), passed over the IPC boundary, and extracted by the worker.
+
+```python
+# 1. Main Process: Inject context into a picklable carrier
+carrier = {}
+propagate.inject(carrier)
+
+# 2. Yield to the ProcessPool (The GIL is safe!)
+hashed_password = await loop.run_in_executor(process_pool, worker_hash, carrier, password_str)
+
+# 3. Worker Process (Re-hydrate OTel)
+def worker_hash(carrier: dict, ...):
+    provider = TracerProvider() # Re-bootstrapping is required!
+    trace.set_tracer_provider(provider)
+    ctx = propagate.extract(carrier) # Bridges the IPC boundary
+    with tracer.start_as_current_span(..., context=ctx):
+        ...
 ```
